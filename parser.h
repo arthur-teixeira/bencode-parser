@@ -9,16 +9,23 @@ typedef enum BencodeKind {
     DICTIONARY
 } BencodeKind;
 
+typedef struct BencodeList {
+    size_t len;
+    size_t cap;
+    struct BencodeType *values;
+} BencodeList;
+
 typedef struct BencodeType {
     BencodeKind kind;
     union {
         char *asString;
         signed long asInt;
-        void *asList;
+        struct BencodeList asList;
         void *asDict;
     };
 } BencodeType;
 
-BencodeType *parse(char *);
+BencodeType parse(char *);
+BencodeType parse_ex(char *input, char **end_ptr);
 
 #endif // PARSER_H
