@@ -13,8 +13,8 @@
 #define da_append(da, value)                                                   \
   do {                                                                         \
     if (da->len == da->cap) {                                                  \
-      da->values = realloc(da->values, 2 * da->cap);                           \
       da->cap *= 2;                                                            \
+      da->values = realloc(da->values, da->cap * sizeof(da->values[0]));       \
     }                                                                          \
     da->values[da->len++] = value;                                             \
   } while (0);
