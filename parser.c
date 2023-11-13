@@ -32,7 +32,7 @@ signed long parse_integer(char *input, char **end_ptr) {
   }
 
   if (end_ptr) {
-    *end_ptr = &input[i];
+    *end_ptr = &input[i + 1];
   }
 
   return strtol(buf, NULL, 10);
@@ -64,11 +64,11 @@ BencodeList parse_list(char *input, char **end_ptr_) {
   da_init(lp, sizeof(BencodeType));
 
   while (end_ptr[0] != 'e') {
-    da_append(lp, parse_ex(end_ptr, &end_ptr));
+    da_append(lp, parse(end_ptr, &end_ptr));
   }
 
   if (end_ptr_) {
-    *end_ptr_ = end_ptr;
+    *end_ptr_ = end_ptr + 1;
   }
 
   return l;
@@ -82,7 +82,7 @@ BencodeDict parse_dict(char *input, char **end_ptr_) {
 
   while (end_ptr[0] != 'e') {
     char *key = parse_bytestring(end_ptr, &end_ptr);
-    BencodeType value = parse_ex(end_ptr, &end_ptr);
+    BencodeType value = parse(end_ptr, &end_ptr);
     BencodeType *heap_value = malloc(sizeof(BencodeType));
 
     memcpy(heap_value, &value, sizeof(BencodeType));
@@ -90,13 +90,13 @@ BencodeDict parse_dict(char *input, char **end_ptr_) {
   }
 
   if (end_ptr_) {
-    *end_ptr_ = end_ptr;
+    *end_ptr_ = end_ptr + 1;
   }
 
   return d;
 }
 
-BencodeType parse_ex(char *input, char **end_ptr) {
+BencodeType parse(char *input, char **end_ptr) {
   assert(strlen(input) > 0);
 
   BencodeType b;
@@ -123,4 +123,17 @@ BencodeType parse_ex(char *input, char **end_ptr) {
   return b;
 }
 
-BencodeType parse(char *input) { return parse_ex(input, NULL); };
+BencodeList parse_stream(char *input) {
+  BencodeList l = { 0 };
+  BencodeList *lp = &l;
+
+  da_init(lp, sizeof(BencodeType));
+
+  char *end_ptr = input;
+  while (strlen(end_ptr) > 0) {
+    BencodeType v = parse(end_ptr, &end_ptr);
+    da_append(lp, v);
+  }
+
+  return l;
+}

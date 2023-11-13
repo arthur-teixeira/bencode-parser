@@ -109,7 +109,7 @@ bool test_integers() {
   };
 
   for (size_t i = 0; i < ARRAY_LEN(tests); i++) {
-    BencodeType type = parse(tests[i].in);
+    BencodeType type = parse(tests[i].in, NULL);
 
     BencodeType expected = (BencodeType){
         .kind = INTEGER,
@@ -127,7 +127,7 @@ bool test_integers() {
 bool test_bytestring() {
   char *test = "4:spam";
 
-  BencodeType type = parse(test);
+  BencodeType type = parse(test, NULL);
 
   BencodeType expected = (BencodeType){
       .kind = BYTESTRING,
@@ -140,7 +140,7 @@ bool test_bytestring() {
 bool test_lists() {
   char *test = "l4:spam4:eggs3:hame";
 
-  BencodeType type = parse(test);
+  BencodeType type = parse(test, NULL);
 
   BencodeType expected_list[] = {
       (BencodeType){.kind = BYTESTRING, .asString = "spam"},
@@ -163,7 +163,7 @@ bool test_lists() {
 bool test_empty_list() {
   char *test = "le";
 
-  BencodeType type = parse(test);
+  BencodeType type = parse(test, NULL);
 
   BencodeType expected_list[] = {};
 
@@ -182,7 +182,7 @@ bool test_empty_list() {
 bool test_dict() {
   char *test = "d3:cow3:moo4:spam4:eggse";
 
-  BencodeType type = parse(test);
+  BencodeType type = parse(test, NULL);
 
   char *expected_keys[] = {
       "cow",
@@ -221,6 +221,37 @@ bool test_dict() {
   return true;
 }
 
+bool test_multiple_values() {
+  char *test = "5:helloi1230eli1ei2ei3ei4ee";
+
+  BencodeList actual = parse_stream(test);
+
+  BencodeType expected_list_values[] = {
+      (BencodeType){ .kind = INTEGER, .asInt = 1 },
+      (BencodeType){ .kind = INTEGER, .asInt = 2 },
+      (BencodeType){ .kind = INTEGER, .asInt = 3 },
+      (BencodeType){ .kind = INTEGER, .asInt = 4 },
+  };
+
+  BencodeList expected_list = {
+      .len = 4,
+      .values = expected_list_values,
+  };
+
+  BencodeType expected_values[] = {
+      (BencodeType){ .kind = BYTESTRING, .asString = "hello" },
+      (BencodeType){ .kind = INTEGER, .asInt = 1230 },
+      (BencodeType){ .kind = LIST, .asList = expected_list },
+  };
+
+  BencodeList expected = {
+      .len = 3,
+      .values = expected_values,
+  };
+
+  return validate_list(&expected, &actual);
+}
+
 int main() {
   TEST_BEGIN();
   RUN_TEST(test_integers);
@@ -228,5 +259,6 @@ int main() {
   RUN_TEST(test_lists);
   RUN_TEST(test_empty_list);
   RUN_TEST(test_dict);
+  RUN_TEST(test_multiple_values);
   return TEST_END();
 }

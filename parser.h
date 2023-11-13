@@ -30,7 +30,8 @@ typedef struct BencodeType {
     };
 } BencodeType;
 
-BencodeType parse(char *);
-BencodeType parse_ex(char *input, char **end_ptr);
+BencodeType parse(char *input, char **end_ptr);
+
+BencodeList parse_stream(char *input);
 
 #endif // PARSER_H
