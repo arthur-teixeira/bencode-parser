@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define HASH_TABLE_IMPLEMENTATION
+#include "stb_hashtable.h"
+
 #define da_init(da, size)                                                      \
   do {                                                                         \
     da->cap = 16;                                                              \
@@ -61,8 +64,7 @@ BencodeList parse_list(char *input, char **end_ptr_) {
   da_init(lp, sizeof(BencodeType));
 
   while (end_ptr[0] != 'e') {
-    char *in = end_ptr;
-    da_append(lp, parse_ex(in, &end_ptr));
+    da_append(lp, parse_ex(end_ptr, &end_ptr));
   }
 
   if (end_ptr_) {
@@ -70,6 +72,28 @@ BencodeList parse_list(char *input, char **end_ptr_) {
   }
 
   return l;
+}
+
+BencodeDict parse_dict(char *input, char **end_ptr_) {
+  BencodeDict d;
+  hash_table_init(&d.table, 16);
+
+  char *end_ptr = &input[1];
+
+  while (end_ptr[0] != 'e') {
+    char *key = parse_bytestring(end_ptr, &end_ptr);
+    BencodeType value = parse_ex(end_ptr, &end_ptr);
+    BencodeType *heap_value = malloc(sizeof(BencodeType));
+
+    memcpy(heap_value, &value, sizeof(BencodeType));
+    hash_table_insert(&d.table, key, heap_value);
+  }
+
+  if (end_ptr_) {
+    *end_ptr_ = end_ptr;
+  }
+
+  return d;
 }
 
 BencodeType parse_ex(char *input, char **end_ptr) {
@@ -89,7 +113,8 @@ BencodeType parse_ex(char *input, char **end_ptr) {
     break;
   case 'd':
     b.kind = DICTIONARY;
-    assert(0 && "NOT IMPLEMENTED");
+    b.asDict = parse_dict(input, end_ptr);
+    break;
   default:
     b.kind = BYTESTRING;
     b.asString = parse_bytestring(input, end_ptr);

@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "stb_hashtable.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -178,11 +179,54 @@ bool test_empty_list() {
   return validate_type(&expected, &type);
 }
 
+bool test_dict() {
+  char *test = "d3:cow3:moo4:spam4:eggse";
+
+  BencodeType type = parse(test);
+
+  char *expected_keys[] = {
+      "cow",
+      "spam",
+  };
+
+  BencodeType expected_values[] = {
+      (BencodeType){.kind = BYTESTRING, .asString = "moo"},
+      (BencodeType){.kind = BYTESTRING, .asString = "eggs"},
+  };
+
+  if (type.kind != DICTIONARY) {
+    printf("expected %i, got %i\n", DICTIONARY, type.kind);
+    return false;
+  }
+
+  for (size_t i = 0; i < ARRAY_LEN(expected_keys); i++) {
+    BencodeType *t = hash_table_lookup(&type.asDict.table, expected_keys[i]);
+    if (!t) {
+      printf("expected key %s to be in the dict\n", expected_keys[i]);
+      return false;
+    }
+
+    if (t->kind != BYTESTRING) {
+      printf("expected %i, got %i\n", DICTIONARY, t->kind);
+      return false;
+    }
+
+    if (strcmp(t->asString, expected_values[i].asString) != 0) {
+      printf("expected key %s to have value %s, got %s\n", expected_keys[i],
+             expected_values[i].asString, t->asString);
+      return false;
+    }
+  }
+
+  return true;
+}
+
 int main() {
   TEST_BEGIN();
   RUN_TEST(test_integers);
   RUN_TEST(test_bytestring);
   RUN_TEST(test_lists);
   RUN_TEST(test_empty_list);
+  RUN_TEST(test_dict);
   return TEST_END();
 }

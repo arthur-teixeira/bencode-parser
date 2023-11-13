@@ -1,6 +1,7 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include "stb_hashtable.h"
 #include <stddef.h>
 typedef enum BencodeKind {
     BYTESTRING,
@@ -15,13 +16,17 @@ typedef struct BencodeList {
     struct BencodeType *values;
 } BencodeList;
 
+typedef struct BencodeDict {
+    hash_table_t table; // hash_table_t<BencodeType>;
+} BencodeDict;
+
 typedef struct BencodeType {
     BencodeKind kind;
     union {
         char *asString;
         signed long asInt;
-        struct BencodeList asList;
-        void *asDict;
+        BencodeList asList;
+        BencodeDict asDict;
     };
 } BencodeType;
 
