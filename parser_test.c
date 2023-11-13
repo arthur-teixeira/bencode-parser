@@ -3,16 +3,45 @@
 #include <stdio.h>
 #include <string.h>
 
+typedef struct {
+  size_t passed;
+  size_t failed;
+} test_suite;
+
+test_suite suite = {0};
+
 #define RUN_TEST(fn)                                                           \
   do {                                                                         \
     if (fn()) {                                                                \
       printf("%s: SUCCESS\n", #fn);                                            \
+      suite.passed++;                                                          \
     } else {                                                                   \
       printf("%s: FAIL\n", #fn);                                               \
+      suite.failed++;                                                          \
     }                                                                          \
   } while (0);
 
 #define ARRAY_LEN(xs) sizeof(xs) / sizeof(xs[0])
+
+void TEST_BEGIN() {
+  printf("\nrunning suite %s\n", __FILE__);
+  printf("\n------------------------\n");
+  suite.passed = 0;
+  suite.failed = 0;
+}
+
+int TEST_END() {
+  printf("\n------------------------\n");
+  printf("%ld passed, %ld failed\n", suite.passed, suite.failed);
+
+  if (suite.failed > 0) {
+    printf("FAILED\n");
+    return 1;
+  }
+
+  printf("PASSED\n");
+  return 0;
+}
 
 bool validate_type(BencodeType *expected, BencodeType *actual);
 
@@ -130,9 +159,30 @@ bool test_lists() {
   return validate_type(&expected, &type);
 }
 
+bool test_empty_list() {
+  char *test = "le";
+
+  BencodeType type = parse(test);
+
+  BencodeType expected_list[] = {};
+
+  BencodeType expected = (BencodeType){
+      .kind = LIST,
+      .asList =
+          (BencodeList){
+              .len = 0,
+              .values = expected_list,
+          },
+  };
+
+  return validate_type(&expected, &type);
+}
+
 int main() {
+  TEST_BEGIN();
   RUN_TEST(test_integers);
   RUN_TEST(test_bytestring);
   RUN_TEST(test_lists);
-  return 0;
+  RUN_TEST(test_empty_list);
+  return TEST_END();
 }
