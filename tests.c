@@ -3,100 +3,49 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <unity/unity.h>
 
-typedef struct {
-  size_t passed;
-  size_t failed;
-} test_suite;
+void setUp(void) {}
 
-test_suite suite = {0};
-
-#define RUN_TEST(fn)                                                           \
-  do {                                                                         \
-    if (fn()) {                                                                \
-      printf("%s: SUCCESS\n", #fn);                                            \
-      suite.passed++;                                                          \
-    } else {                                                                   \
-      printf("%s: FAIL\n", #fn);                                               \
-      suite.failed++;                                                          \
-    }                                                                          \
-  } while (0);
+void tearDown(void) {}
 
 #define ARRAY_LEN(xs) sizeof(xs) / sizeof(xs[0])
 
-void TEST_BEGIN() {
-  printf("\nrunning suite %s\n", __FILE__);
-  printf("\n------------------------\n");
-  suite.passed = 0;
-  suite.failed = 0;
-}
+void validate_type(BencodeType *expected, BencodeType *actual);
 
-int TEST_END() {
-  printf("\n------------------------\n");
-  printf("%ld passed, %ld failed\n", suite.passed, suite.failed);
-
-  if (suite.failed > 0) {
-    printf("FAILED\n");
-    return 1;
-  }
-
-  printf("PASSED\n");
-  return 0;
-}
-
-bool validate_type(BencodeType *expected, BencodeType *actual);
-
-bool validate_list(BencodeList *expected, BencodeList *actual) {
+void validate_list(BencodeList *expected, BencodeList *actual) {
   if (expected->len != actual->len) {
     printf("expected %ld elements, got %ld\n", expected->len, actual->len);
   }
 
   for (size_t i = 0; i < expected->len; i++) {
-    if (!validate_type(&expected->values[i], &actual->values[i])) {
-      return false;
-    }
+    validate_type(&expected->values[i], &actual->values[i]);
   }
-
-  return true;
 }
 
-bool validate_type(BencodeType *expected, BencodeType *actual) {
-  if (!expected && actual) {
-    printf("expected a value, got NULL");
-    return false;
+void validate_type(BencodeType *expected, BencodeType *actual) {
+  if (!actual && expected) {
+    TEST_FAIL_MESSAGE("expected a value, got NULL");
   }
 
-  if (expected->kind != actual->kind) {
-    printf("expected %i, got %i\n", expected->kind, actual->kind);
-    return false;
-  }
+  TEST_ASSERT_EQUAL(expected->kind, actual->kind);
 
   switch (expected->kind) {
   case INTEGER:
-    if (expected->asInt != actual->asInt) {
-      printf("expected %ld, got %ld\n", expected->asInt, actual->asInt);
-      return false;
-    }
+    TEST_ASSERT_EQUAL(expected->asInt, actual->asInt);
     break;
   case BYTESTRING:
-    if (strcmp(expected->asString, actual->asString) != 0) {
-      printf("expected %ld, got %ld\n", expected->asInt, actual->asInt);
-      return false;
-    }
+    TEST_ASSERT_EQUAL_STRING(expected->asString, actual->asString);
     break;
   case LIST:
-    if (!validate_list(&expected->asList, &actual->asList)) {
-      return false;
-    }
+    validate_list(&expected->asList, &actual->asList);
     break;
   default:
-    return false;
+    break;
   }
-
-  return true;
 }
 
-bool test_lexer() {
+void test_lexer() {
   char *input = "5:helloi1230eli1ei2ei3ei4eed3:cow3:moo4:spam4:eggse";
 
   Token expected_tokens[] = {
@@ -141,42 +90,55 @@ bool test_lexer() {
   l.prev = (Token){ILLEGAL, .asString = ""};
   l.buf = input;
 
-  size_t i = 0;
-  for (; i < ARRAY_LEN(expected_tokens); i++) {
+  for (size_t i = 0; i < ARRAY_LEN(expected_tokens); i++) {
     Token expected_t = expected_tokens[i];
     Token t = next_token(&l);
+    char msg[100];
+    sprintf(msg, "At i = %ld\n", i);
 
-    if (t.type != expected_t.type) {
-      printf("Expected type to be %i, got %i\n", expected_t.type, t.type);
-      goto fail;
-    }
-
+    TEST_ASSERT_EQUAL_MESSAGE(expected_t.type, t.type, msg);
     switch (t.type) {
     case STRING_SIZE:
     case INT:
-      if (t.asInt != expected_t.asInt) {
-        printf("Expected asInt to be %ld, got %ld\n", expected_t.asInt,
-               t.asInt);
-        goto fail;
-      }
+      TEST_ASSERT_EQUAL_INT_MESSAGE(expected_t.asInt, t.asInt, msg);
       break;
     case STRING:
-      if (strcmp(t.asString, expected_t.asString) != 0) {
-        printf("Expected asString to be %s, got %s\n", expected_t.asString,
-               t.asString);
-        goto fail;
-      }
+      TEST_ASSERT_EQUAL_STRING_MESSAGE(expected_t.asString, t.asString, msg);
       break;
     default:
       break;
     }
   }
+}
 
-  return true;
+Parser get_parser(char *input) {
+  Parser p = {0};
 
-fail:
- printf("at i = %ld\n", i);
- return false;
+  Lexer l = {0};
+  l.buf = input;
+  l.prevprev = (Token){ILLEGAL, .asString = ""};
+  l.prev = (Token){ILLEGAL, .asString = ""};
+
+  p.l = l;
+  p.cur_token = next_token(&p.l);
+  p.peek_token = next_token(&p.l);
+
+  return p;
+}
+
+BencodeType parse_and_check_for_errors(char *input) {
+  Parser p = get_parser(input);
+  BencodeType result = parse_item(&p);
+
+  if (p.error_index > 0) {
+    printf("Parser has errors: \n");
+    for (size_t i = 0; i < p.error_index; i++) {
+      printf("%s\n", p.errors[i]);
+      free(p.errors[i]);
+    }
+  }
+
+  return result;
 }
 
 typedef struct {
@@ -184,7 +146,7 @@ typedef struct {
   long expected;
 } int_test;
 
-bool test_integers() {
+void test_integers() {
   int_test tests[] = {
       {"i3e", 3},
       {"i-3e", -3},
@@ -192,25 +154,21 @@ bool test_integers() {
   };
 
   for (size_t i = 0; i < ARRAY_LEN(tests); i++) {
-    BencodeType type = parse_item(tests[i].in, NULL);
+    Parser p = get_parser(tests[i].in);
+    BencodeType type = parse_item(&p);
 
     BencodeType expected = (BencodeType){
         .kind = INTEGER,
         .asInt = tests[i].expected,
     };
 
-    if (!validate_type(&expected, &type)) {
-      return false;
-    }
+    validate_type(&expected, &type);
   }
-
-  return true;
 }
 
-bool test_bytestring() {
+void test_bytestring() {
   char *test = "4:spam";
-
-  BencodeType type = parse_item(test, NULL);
+  BencodeType type = parse_and_check_for_errors(test);
 
   BencodeType expected = (BencodeType){
       .kind = BYTESTRING,
@@ -220,10 +178,11 @@ bool test_bytestring() {
   return validate_type(&expected, &type);
 }
 
-bool test_lists() {
+void test_lists() {
   char *test = "l4:spam4:eggs3:hame";
+  Parser p = get_parser(test);
 
-  BencodeType type = parse_item(test, NULL);
+  BencodeType type = parse_item(&p);
 
   BencodeType expected_list[] = {
       (BencodeType){.kind = BYTESTRING, .asString = "spam"},
@@ -243,10 +202,10 @@ bool test_lists() {
   return validate_type(&expected, &type);
 }
 
-bool test_empty_list() {
+void test_empty_list() {
   char *test = "le";
-
-  BencodeType type = parse_item(test, NULL);
+  Parser p = get_parser(test);
+  BencodeType type = parse_item(&p);
 
   BencodeType expected_list[] = {};
 
@@ -262,10 +221,10 @@ bool test_empty_list() {
   return validate_type(&expected, &type);
 }
 
-bool test_dict() {
+void test_dict() {
   char *test = "d3:cow3:moo4:spam4:eggse";
-
-  BencodeType type = parse_item(test, NULL);
+  Parser p = get_parser(test);
+  BencodeType type = parse_item(&p);
 
   char *expected_keys[] = {
       "cow",
@@ -277,37 +236,28 @@ bool test_dict() {
       (BencodeType){.kind = BYTESTRING, .asString = "eggs"},
   };
 
-  if (type.kind != DICTIONARY) {
-    printf("expected %i, got %i\n", DICTIONARY, type.kind);
-    return false;
-  }
+  TEST_ASSERT_EQUAL(DICTIONARY, type.kind);
 
   for (size_t i = 0; i < ARRAY_LEN(expected_keys); i++) {
-    BencodeType *t = hash_table_lookup(&type.asDict.table, expected_keys[i]);
-    if (!t) {
-      printf("expected key %s to be in the dict\n", expected_keys[i]);
-      return false;
-    }
+    BencodeType *t = hash_table_lookup(&type.asDict, expected_keys[i]);
+    char msg[100];
+    sprintf(msg, "expected key %s to be in the dict at i = %ld\n",
+            expected_keys[i], i);
+    TEST_ASSERT_NOT_NULL_MESSAGE(t, msg);
 
-    if (t->kind != BYTESTRING) {
-      printf("expected %i, got %i\n", DICTIONARY, t->kind);
-      return false;
-    }
+    sprintf(msg, "at i = %ld\n", i);
 
-    if (strcmp(t->asString, expected_values[i].asString) != 0) {
-      printf("expected key %s to have value %s, got %s\n", expected_keys[i],
-             expected_values[i].asString, t->asString);
-      return false;
-    }
+    TEST_ASSERT_EQUAL_MESSAGE(BYTESTRING, t->kind, msg);
+
+    TEST_ASSERT_EQUAL_STRING_MESSAGE(expected_values[i].asString, t->asString,
+                                     msg);
   }
-
-  return true;
 }
 
-bool test_multiple_values() {
+void test_multiple_values() {
   char *test = "5:helloi1230eli1ei2ei3ei4ee";
-
-  BencodeList actual = parse(test);
+  Parser p = get_parser(test);
+  BencodeList actual = parse(&p);
 
   BencodeType expected_list_values[] = {
       (BencodeType){.kind = INTEGER, .asInt = 1},
@@ -336,7 +286,7 @@ bool test_multiple_values() {
 }
 
 int main() {
-  TEST_BEGIN();
+  UNITY_BEGIN();
   RUN_TEST(test_lexer);
   RUN_TEST(test_integers);
   RUN_TEST(test_bytestring);
@@ -344,5 +294,5 @@ int main() {
   RUN_TEST(test_empty_list);
   RUN_TEST(test_dict);
   RUN_TEST(test_multiple_values);
-  return TEST_END();
+  return UNITY_END();
 }
