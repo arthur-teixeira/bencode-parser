@@ -96,6 +96,89 @@ bool validate_type(BencodeType *expected, BencodeType *actual) {
   return true;
 }
 
+bool test_lexer() {
+  char *input = "5:helloi1230eli1ei2ei3ei4eed3:cow3:moo4:spam4:eggse";
+
+  Token expected_tokens[] = {
+      {STRING_SIZE, .asInt = 5},
+      {COLON, .asString = ""},
+      {STRING, .asString = "hello"},
+      {INT_START, .asString = ""},
+      {INT, .asInt = 1230},
+      {END, .asString = ""},
+      {LIST_START, .asString = ""},
+      {INT_START, .asString = ""},
+      {INT, .asInt = 1},
+      {END, .asString = ""},
+      {INT_START, .asString = ""},
+      {INT, .asInt = 2},
+      {END, .asString = ""},
+      {INT_START, .asString = ""},
+      {INT, .asInt = 3},
+      {END, .asString = ""},
+      {INT_START, .asString = ""},
+      {INT, .asInt = 4},
+      {END, .asString = ""},
+      {END, .asString = ""},
+      {DICT_START, .asString = ""},
+      {STRING_SIZE, .asInt = 3},
+      {COLON, .asString = ""},
+      {STRING, .asString = "cow"},
+      {STRING_SIZE, .asInt = 3},
+      {COLON, .asString = ""},
+      {STRING, .asString = "moo"},
+      {STRING_SIZE, .asInt = 4},
+      {COLON, .asString = ""},
+      {STRING, .asString = "spam"},
+      {STRING_SIZE, .asInt = 4},
+      {COLON, .asString = ""},
+      {STRING, .asString = "eggs"},
+      {END, .asString = ""},
+  };
+
+  Lexer l = {0};
+  l.prevprev = (Token){ILLEGAL, .asString = ""};
+  l.prev = (Token){ILLEGAL, .asString = ""};
+  l.buf = input;
+
+  size_t i = 0;
+  for (; i < ARRAY_LEN(expected_tokens); i++) {
+    Token expected_t = expected_tokens[i];
+    Token t = next_token(&l);
+
+    if (t.type != expected_t.type) {
+      printf("Expected type to be %i, got %i\n", expected_t.type, t.type);
+      goto fail;
+    }
+
+    switch (t.type) {
+    case STRING_SIZE:
+    case INT:
+      if (t.asInt != expected_t.asInt) {
+        printf("Expected asInt to be %ld, got %ld\n", expected_t.asInt,
+               t.asInt);
+        goto fail;
+      }
+      break;
+    case STRING:
+      if (strcmp(t.asString, expected_t.asString) != 0) {
+        printf("Expected asString to be %s, got %s\n", expected_t.asString,
+               t.asString);
+        goto fail;
+      }
+      break;
+    default:
+      break;
+    }
+  }
+
+  return true;
+
+fail:
+ printf("at i = %ld\n", i);
+ return false;
+}
+
 typedef struct {
   char *in;
   long expected;
@@ -109,7 +192,7 @@ bool test_integers() {
   };
 
   for (size_t i = 0; i < ARRAY_LEN(tests); i++) {
-    BencodeType type = parse(tests[i].in, NULL);
+    BencodeType type = parse_item(tests[i].in, NULL);
 
     BencodeType expected = (BencodeType){
         .kind = INTEGER,
@@ -127,7 +210,7 @@ bool test_integers() {
 bool test_bytestring() {
   char *test = "4:spam";
 
-  BencodeType type = parse(test, NULL);
+  BencodeType type = parse_item(test, NULL);
 
   BencodeType expected = (BencodeType){
       .kind = BYTESTRING,
@@ -140,7 +223,7 @@ bool test_bytestring() {
 bool test_lists() {
   char *test = "l4:spam4:eggs3:hame";
 
-  BencodeType type = parse(test, NULL);
+  BencodeType type = parse_item(test, NULL);
 
   BencodeType expected_list[] = {
       (BencodeType){.kind = BYTESTRING, .asString = "spam"},
@@ -163,7 +246,7 @@ bool test_lists() {
 bool test_empty_list() {
   char *test = "le";
 
-  BencodeType type = parse(test, NULL);
+  BencodeType type = parse_item(test, NULL);
 
   BencodeType expected_list[] = {};
 
@@ -182,7 +265,7 @@ bool test_empty_list() {
 bool test_dict() {
   char *test = "d3:cow3:moo4:spam4:eggse";
 
-  BencodeType type = parse(test, NULL);
+  BencodeType type = parse_item(test, NULL);
 
   char *expected_keys[] = {
       "cow",
@@ -224,13 +307,13 @@ bool test_dict() {
 bool test_multiple_values() {
   char *test = "5:helloi1230eli1ei2ei3ei4ee";
 
-  BencodeList actual = parse_stream(test);
+  BencodeList actual = parse(test);
 
   BencodeType expected_list_values[] = {
-      (BencodeType){ .kind = INTEGER, .asInt = 1 },
-      (BencodeType){ .kind = INTEGER, .asInt = 2 },
-      (BencodeType){ .kind = INTEGER, .asInt = 3 },
-      (BencodeType){ .kind = INTEGER, .asInt = 4 },
+      (BencodeType){.kind = INTEGER, .asInt = 1},
+      (BencodeType){.kind = INTEGER, .asInt = 2},
+      (BencodeType){.kind = INTEGER, .asInt = 3},
+      (BencodeType){.kind = INTEGER, .asInt = 4},
   };
 
   BencodeList expected_list = {
@@ -239,9 +322,9 @@ bool test_multiple_values() {
   };
 
   BencodeType expected_values[] = {
-      (BencodeType){ .kind = BYTESTRING, .asString = "hello" },
-      (BencodeType){ .kind = INTEGER, .asInt = 1230 },
-      (BencodeType){ .kind = LIST, .asList = expected_list },
+      (BencodeType){.kind = BYTESTRING, .asString = "hello"},
+      (BencodeType){.kind = INTEGER, .asInt = 1230},
+      (BencodeType){.kind = LIST, .asList = expected_list},
   };
 
   BencodeList expected = {
@@ -254,6 +337,7 @@ bool test_multiple_values() {
 
 int main() {
   TEST_BEGIN();
+  RUN_TEST(test_lexer);
   RUN_TEST(test_integers);
   RUN_TEST(test_bytestring);
   RUN_TEST(test_lists);

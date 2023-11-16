@@ -3,6 +3,7 @@
 
 #include "stb_hashtable.h"
 #include <stddef.h>
+#include <stdio.h>
 typedef enum BencodeKind {
     BYTESTRING,
     INTEGER,
@@ -30,8 +31,42 @@ typedef struct BencodeType {
     };
 } BencodeType;
 
-BencodeType parse(char *input, char **end_ptr);
+BencodeType parse_item(char *input, char **end_ptr);
 
-BencodeList parse_stream(char *input);
+BencodeList parse(char *input);
+
+typedef enum {
+    LIST_START,
+    DICT_START,
+    INT_START,
+    INT,
+    END,
+    STRING_SIZE,
+    STRING,
+    COLON,
+    ILLEGAL,
+} TokenType;
+
+typedef struct {
+    TokenType type;
+    union {
+        char *asString;
+        long asInt;
+    };
+} Token;
+
+typedef struct {
+    FILE *input;
+    char *buf;
+    size_t bufsize;
+    size_t pos;
+    size_t read_pos;
+    char ch;
+    Token prevprev;
+    Token prev;
+} Lexer;
+
+void open_stream(Lexer *l, const char *filename);
+Token next_token(Lexer *l);
 
 #endif // PARSER_H
