@@ -206,12 +206,14 @@ Token next_token(Lexer *l) {
   case 'i':
     t.type = INT_START;
     break;
-  case 'e':
-    t.type = END;
-    break;
   case ':':
     t.type = COLON;
     break;
+  case 'e':
+    if (l->prev.type != COLON) {
+      t.type = END;
+      break;
+    }
   default:
     if (isdigit(l->ch)) {
       char buf[500];
