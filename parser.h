@@ -4,11 +4,14 @@
 #include "stb_hashtable.h"
 #include <stddef.h>
 #include <stdio.h>
+#include <stdbool.h>
+
 typedef enum BencodeKind {
     BYTESTRING,
     INTEGER,
     LIST,
-    DICTIONARY
+    DICTIONARY,
+    ERROR,
 } BencodeKind;
 
 typedef struct BencodeList {
@@ -17,23 +20,15 @@ typedef struct BencodeList {
     struct BencodeType *values;
 } BencodeList;
 
-typedef struct BencodeDict {
-    hash_table_t table; // hash_table_t<BencodeType>;
-} BencodeDict;
-
 typedef struct BencodeType {
     BencodeKind kind;
     union {
         char *asString;
         signed long asInt;
         BencodeList asList;
-        BencodeDict asDict;
+        hash_table_t asDict;
     };
 } BencodeType;
-
-BencodeType parse_item(char *input, char **end_ptr);
-
-BencodeList parse(char *input);
 
 typedef enum {
     LIST_START,
@@ -44,6 +39,7 @@ typedef enum {
     STRING_SIZE,
     STRING,
     COLON,
+    END_OF_FILE,
     ILLEGAL,
 } TokenType;
 
@@ -66,7 +62,22 @@ typedef struct {
     Token prev;
 } Lexer;
 
+typedef struct {
+    Lexer l;
+    Token cur_token;
+    Token peek_token;
+    char *errors[500];
+    size_t error_index;
+} Parser;
+
 void open_stream(Lexer *l, const char *filename);
 Token next_token(Lexer *l);
+BencodeType parse_item(Parser *p);
+BencodeList parse(Parser *p);
+void parser_next_token(Parser *p);
+Parser new_parser(Lexer l);
+bool expect_peek(Parser *p, TokenType expected);
+void parse_error(Parser *p, char *error);
+Lexer new_lexer(char *filename);
 
 #endif // PARSER_H

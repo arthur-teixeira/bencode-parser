@@ -1,7 +1,6 @@
 #include "parser.h"
 #include <assert.h>
 #include <ctype.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,117 +24,115 @@
     da->values[da->len++] = value;                                             \
   } while (0);
 
-signed long parse_integer(char *input, char **end_ptr) {
-  char buf[strlen(input)];
-
-  size_t i = 1;
-  while (input[i] != 'e') {
-    buf[i - 1] = input[i];
-    i++;
-  }
-
-  if (end_ptr) {
-    *end_ptr = &input[i + 1];
-  }
-
-  return strtol(buf, NULL, 10);
-}
-
-char *parse_bytestring(char *input, char **end_ptr) {
-  size_t n = atoi((char[]){input[0]});
-
-  char *out = calloc(n, sizeof(char));
-
-  size_t i = 2;
-  for (; i < n + 2; i++) {
-    out[i - 2] = input[i];
-  }
-
-  if (end_ptr) {
-    *end_ptr = &input[i];
-  }
-
-  return out;
-}
-
-BencodeList parse_list(char *input, char **end_ptr_) {
-  BencodeList l;
-
-  char *end_ptr = &input[1];
-
-  BencodeList *lp = &l;
-  da_init(lp, sizeof(BencodeType));
-
-  while (end_ptr[0] != 'e') {
-    da_append(lp, parse_item(end_ptr, &end_ptr));
-  }
-
-  if (end_ptr_) {
-    *end_ptr_ = end_ptr + 1;
-  }
-
-  return l;
-}
-
-BencodeDict parse_dict(char *input, char **end_ptr_) {
-  BencodeDict d;
-  hash_table_init(&d.table, 16);
-
-  char *end_ptr = &input[1];
-
-  while (end_ptr[0] != 'e') {
-    char *key = parse_bytestring(end_ptr, &end_ptr);
-    BencodeType value = parse_item(end_ptr, &end_ptr);
-    BencodeType *heap_value = malloc(sizeof(BencodeType));
-
-    memcpy(heap_value, &value, sizeof(BencodeType));
-    hash_table_insert(&d.table, key, heap_value);
-  }
-
-  if (end_ptr_) {
-    *end_ptr_ = end_ptr + 1;
-  }
-
-  return d;
-}
-
-BencodeType parse_item(char *input, char **end_ptr) {
-  assert(strlen(input) > 0);
-
+BencodeType parse_integer(Parser *p) {
   BencodeType b;
+  if (!expect_peek(p, INT)) {
+    parse_error(p, "Integer initializer is not followed by an integer value");
+  }
 
-  char type = input[0];
-  switch (type) {
-  case 'i':
-    b.kind = INTEGER;
-    b.asInt = parse_integer(input, end_ptr);
-    break;
-  case 'l':
-    b.kind = LIST;
-    b.asList = parse_list(input, end_ptr);
-    break;
-  case 'd':
-    b.kind = DICTIONARY;
-    b.asDict = parse_dict(input, end_ptr);
-    break;
-  default:
-    b.kind = BYTESTRING;
-    b.asString = parse_bytestring(input, end_ptr);
+  b.kind = INTEGER;
+  b.asInt = p->cur_token.asInt;
+
+  if (!expect_peek(p, END)) {
+    parse_error(p, "Unterminated int value");
   }
 
   return b;
 }
 
-BencodeList parse(char *input) {
+BencodeType parse_bytestring(Parser *p) {
+  assert(p->cur_token.type == STRING_SIZE);
+  BencodeType s = {0};
+
+  if (!expect_peek(p, COLON)) {
+    return s;
+  }
+
+  if (!expect_peek(p, STRING)) {
+    parse_error(p, "ERROR: A colon should be followed by a string\n");
+    return s;
+  }
+
+  s.asString = p->cur_token.asString;
+
+  return s;
+}
+
+BencodeType parse_list(Parser *p) {
+  BencodeType l;
+  l.kind = LIST;
+
+  BencodeList *lp = &l.asList;
+  da_init(lp, sizeof(BencodeType));
+
+  parser_next_token(p);
+
+  while (p->cur_token.type != END) {
+    da_append(lp, parse_item(p));
+    parser_next_token(p);
+  }
+
+  return l;
+}
+
+BencodeType parse_dict(Parser *p) {
+  BencodeType d;
+  d.kind = DICTIONARY;
+  hash_table_init(&d.asDict, 16);
+
+  parser_next_token(p);
+  while (p->cur_token.type != END) {
+    BencodeType key = parse_item(p);
+    if (key.kind != BYTESTRING) {
+      sprintf(p->errors[p->error_index++], "Dictionary key is not a string\n");
+      return d;
+    }
+
+    parser_next_token(p);
+    BencodeType value = parse_item(p);
+    BencodeType *heap_value = malloc(sizeof(BencodeType));
+
+    memcpy(heap_value, &value, sizeof(BencodeType));
+    hash_table_insert(&d.asDict, key.asString, heap_value);
+
+    parser_next_token(p);
+  }
+
+  return d;
+}
+
+BencodeType parse_item(Parser *p) {
+  switch (p->cur_token.type) {
+  case INT_START:
+    return parse_integer(p);
+  case LIST_START:
+    return parse_list(p);
+    break;
+  case DICT_START:
+    return parse_dict(p);
+    break;
+  case STRING_SIZE:
+    return parse_bytestring(p);
+  default:
+    parse_error(p, "unexpected token");
+    break;
+  }
+
+  BencodeType e;
+  e.kind = ERROR;
+
+  return e;
+}
+
+BencodeList parse(Parser *p) {
   BencodeList l = {0};
   BencodeList *lp = &l;
 
   da_init(lp, sizeof(BencodeType));
 
-  char *end_ptr = input;
-  while (strlen(end_ptr) > 0) {
-    BencodeType v = parse_item(end_ptr, &end_ptr);
-    da_append(lp, v);
+  while (p->cur_token.type != END_OF_FILE) {
+    da_append(lp, parse_item(p));
+    parser_next_token(p);
   }
 
   return l;
@@ -163,12 +160,16 @@ Lexer new_lexer(char *filename) {
 
 void read_char(Lexer *l) {
   if (l->read_pos >= strlen(l->buf)) {
-    memset(l->buf, 0, l->bufsize);
-    fread(l->buf, l->bufsize, sizeof(char), l->input);
-    l->read_pos = 0;
-    l->pos = 0;
+    if (l->input && !feof(l->input)) {
+      memset(l->buf, 0, l->bufsize);
+      fread(l->buf, l->bufsize, sizeof(char), l->input);
+      l->read_pos = 0;
+      l->pos = 0;
 
-    l->ch = l->buf[l->read_pos];
+      l->ch = l->buf[l->read_pos];
+    } else {
+      l->ch = 0;
+    }
   } else {
     l->ch = l->buf[l->read_pos];
   }
@@ -215,13 +216,13 @@ Token next_token(Lexer *l) {
       break;
     }
   default:
-    if (isdigit(l->ch)) {
+    if (isdigit(l->ch) || l->ch == '-') {
       char buf[500];
       memset(buf, 0, sizeof(buf));
       size_t i = 0;
       while (true) {
         buf[i] = l->ch;
-        if (!isdigit(buf[i])) {
+        if (!isdigit(buf[i]) && l->ch != '-') {
           t.type = ILLEGAL;
           return t;
         }
@@ -254,6 +255,10 @@ Token next_token(Lexer *l) {
       }
 
       t.asString[i] = l->ch;
+    } else if (!l->input && (strcmp("\n", &l->ch) || strcmp("\0", &l->ch))) {
+      t.type = END_OF_FILE;
+    } else if (l->input && feof(l->input)) {
+      t.type = END_OF_FILE;
     }
   }
 
@@ -261,4 +266,35 @@ Token next_token(Lexer *l) {
   l->prev = t;
 
   return t;
+}
+
+void parser_next_token(Parser *p) {
+  p->cur_token = p->peek_token;
+  p->peek_token = next_token(&p->l);
+}
+
+bool expect_peek(Parser *p, TokenType expected) {
+  if (p->peek_token.type != expected) {
+    char err[100];
+    sprintf(err, "ERROR: expected token %i", expected);
+    parse_error(p, err);
+    return false;
+  }
+
+  parser_next_token(p);
+  return true;
+}
+
+void parse_error(Parser *p, char *error) {
+  p->errors[p->error_index++] = strdup(error);
+}
+
+Parser new_parser(Lexer l) {
+  Parser p = {
+      .l = l,
+  };
+  p.cur_token = next_token(&p.l);
+  p.peek_token = next_token(&p.l);
+
+  return p;
 }
