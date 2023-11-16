@@ -1,9 +1,11 @@
-#include "parser.h"
 #include "stb_hashtable.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <unity/unity.h>
+
+#define BENCODE_IMPLEMENTATION
+#include "stb_bencode.h"
 
 void setUp(void) {}
 
