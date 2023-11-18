@@ -51,6 +51,7 @@ void print_bencode(BencodeType t, size_t indent_size) {
     for (size_t i = 0; i < t.asList.len; i++) {
       print_bencode(t.asList.values[i], indent_size + 2);
     }
+    indent(indent_size);
     printf("END_LIST\n");
     break;
   case DICTIONARY:
