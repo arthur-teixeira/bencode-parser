@@ -6,6 +6,6 @@ set -xe;
 
 mkdir -p ./bin/
 
-clang $CFLAGS -o ./bin/tests ./*.c -lunity
+clang $CFLAGS -o ./bin/tests ./tests.c -lunity
 
 ./bin/tests
