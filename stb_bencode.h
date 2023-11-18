@@ -2,72 +2,72 @@
 #define PARSER_H
 
 #include "stb_hashtable.h"
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <stdbool.h>
 
 typedef enum BencodeKind {
-    BYTESTRING,
-    INTEGER,
-    LIST,
-    DICTIONARY,
-    ERROR,
+  BYTESTRING,
+  INTEGER,
+  LIST,
+  DICTIONARY,
+  ERROR,
 } BencodeKind;
 
 typedef struct BencodeList {
-    size_t len;
-    size_t cap;
-    struct BencodeType *values;
+  size_t len;
+  size_t cap;
+  struct BencodeType *values;
 } BencodeList;
 
 typedef struct BencodeType {
-    BencodeKind kind;
-    union {
-        char *asString;
-        signed long asInt;
-        BencodeList asList;
-        hash_table_t asDict;
-    };
+  BencodeKind kind;
+  union {
+    char *asString;
+    signed long asInt;
+    BencodeList asList;
+    hash_table_t asDict;
+  };
 } BencodeType;
 
 typedef enum {
-    LIST_START,
-    DICT_START,
-    INT_START,
-    INT,
-    END,
-    STRING_SIZE,
-    STRING,
-    COLON,
-    END_OF_FILE,
-    ILLEGAL,
+  LIST_START,
+  DICT_START,
+  INT_START,
+  INT,
+  END,
+  STRING_SIZE,
+  STRING,
+  COLON,
+  END_OF_FILE,
+  ILLEGAL,
 } TokenType;
 
 typedef struct {
-    TokenType type;
-    union {
-        char *asString;
-        long asInt;
-    };
+  TokenType type;
+  union {
+    char *asString;
+    long asInt;
+  };
 } Token;
 
 typedef struct {
-    FILE *input;
-    char *buf;
-    size_t bufsize;
-    size_t pos;
-    size_t read_pos;
-    char ch;
-    Token prevprev;
-    Token prev;
+  FILE *input;
+  char *buf;
+  size_t bufsize;
+  size_t pos;
+  size_t read_pos;
+  char ch;
+  Token prevprev;
+  Token prev;
 } Lexer;
 
 typedef struct {
-    Lexer l;
-    Token cur_token;
-    Token peek_token;
-    char *errors[500];
-    size_t error_index;
+  Lexer l;
+  Token cur_token;
+  Token peek_token;
+  char *errors[500];
+  size_t error_index;
 } Parser;
 
 void open_stream(Lexer *l, const char *filename);
@@ -163,7 +163,7 @@ BencodeType parse_list(Parser *p) {
 BencodeType parse_dict(Parser *p) {
   BencodeType d;
   d.kind = DICTIONARY;
-  hash_table_init(&d.asDict, 16);
+  hash_table_init(&d.asDict);
 
   parser_next_token(p);
   while (p->cur_token.type != END) {
@@ -178,7 +178,8 @@ BencodeType parse_dict(Parser *p) {
     BencodeType *heap_value = malloc(sizeof(BencodeType));
 
     memcpy(heap_value, &value, sizeof(BencodeType));
-    hash_table_insert(&d.asDict, key.asString, heap_value);
+    hash_table_insert(&d.asDict, key.asString, strlen(key.asString),
+                      heap_value);
 
     parser_next_token(p);
   }
@@ -384,4 +385,4 @@ Parser new_parser(Lexer l) {
   return p;
 }
 
-#endif //BENCODE_IMPLEMENTATION
+#endif // BENCODE_IMPLEMENTATION

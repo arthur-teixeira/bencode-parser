@@ -241,7 +241,7 @@ void test_dict() {
   TEST_ASSERT_EQUAL(DICTIONARY, type.kind);
 
   for (size_t i = 0; i < ARRAY_LEN(expected_keys); i++) {
-    BencodeType *t = hash_table_lookup(&type.asDict, expected_keys[i]);
+    BencodeType *t = hash_table_lookup(&type.asDict, expected_keys[i], strlen(expected_keys[i]));
     char msg[100];
     sprintf(msg, "expected key %s to be in the dict at i = %ld\n",
             expected_keys[i], i);
