@@ -224,18 +224,22 @@ void test_empty_list() {
 }
 
 void test_dict() {
-  char *test = "d3:cow3:moo4:spam4:eggse";
+  char *test = "d3:cow3:moo4:spam4:eggs3:abc5:itest3:def5:lteste";
   Parser p = get_parser(test);
   BencodeType type = parse_item(&p);
 
   char *expected_keys[] = {
       "cow",
       "spam",
+      "abc",
+      "def",
   };
 
   BencodeType expected_values[] = {
       (BencodeType){.kind = BYTESTRING, .asString = "moo"},
       (BencodeType){.kind = BYTESTRING, .asString = "eggs"},
+      (BencodeType){.kind = BYTESTRING, .asString = "itest"},
+      (BencodeType){.kind = BYTESTRING, .asString = "ltest"},
   };
 
   TEST_ASSERT_EQUAL(DICTIONARY, type.kind);

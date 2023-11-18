@@ -169,7 +169,7 @@ BencodeType parse_dict(Parser *p) {
   while (p->cur_token.type != END) {
     BencodeType key = parse_item(p);
     if (key.kind != BYTESTRING) {
-      sprintf(p->errors[p->error_index++], "Dictionary key is not a string\n");
+      parse_error(p, "Dictionary key is not a string\n");
       return d;
     }
 
@@ -240,12 +240,16 @@ Lexer new_lexer(char *filename) {
   Lexer l;
   l.pos = 0;
   l.read_pos = 0;
+  l.bufsize = 10000;
+  l.buf = calloc(l.bufsize, sizeof(char));
   open_stream(&l, filename);
   return l;
 }
 
+void free_lexer(Lexer *l) { free(l->buf); }
+
 void read_char(Lexer *l) {
-  if (l->read_pos >= strlen(l->buf)) {
+  if (l->read_pos >= l->bufsize) {
     if (l->input && !feof(l->input)) {
       memset(l->buf, 0, l->bufsize);
       fread(l->buf, l->bufsize, sizeof(char), l->input);
@@ -265,7 +269,7 @@ void read_char(Lexer *l) {
 }
 
 char peek_char(Lexer *l) {
-  if (l->read_pos >= strlen(l->buf)) {
+  if (l->read_pos >= l->bufsize) {
     if (l->input && !feof(l->input)) {
       char c = fgetc(l->input);
       ungetc(c, l->input);
@@ -284,18 +288,24 @@ Token next_token(Lexer *l) {
   read_char(l);
 
   switch (l->ch) {
-  case 'd':
-    t.type = DICT_START;
-    break;
-  case 'l':
-    t.type = LIST_START;
-    break;
-  case 'i':
-    t.type = INT_START;
-    break;
   case ':':
     t.type = COLON;
     break;
+  case 'd':
+    if (l->prev.type != COLON) {
+      t.type = DICT_START;
+      break;
+    }
+  case 'l':
+    if (l->prev.type != COLON) {
+      t.type = LIST_START;
+      break;
+    }
+  case 'i':
+    if (l->prev.type != COLON) {
+      t.type = INT_START;
+      break;
+    }
   case 'e':
     if (l->prev.type != COLON) {
       t.type = END;
@@ -330,7 +340,7 @@ Token next_token(Lexer *l) {
       }
 
       t.asInt = strtol(buf, NULL, 10);
-    } else if (l->prevprev.type == STRING_SIZE && isalnum(l->ch)) {
+    } else if (l->prevprev.type == STRING_SIZE) {
       t.type = STRING;
       size_t n = l->prevprev.asInt;
       t.asString = calloc(n, sizeof(char));
