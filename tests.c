@@ -7,6 +7,9 @@
 #define BENCODE_IMPLEMENTATION
 #include "stb_bencode.h"
 
+#define MAKE_STR(xs)                                                           \
+  (BencodeString) { .len = strlen(xs), .str = xs }
+
 void setUp(void) {}
 
 void tearDown(void) {}
@@ -37,7 +40,8 @@ void validate_type(BencodeType *expected, BencodeType *actual) {
     TEST_ASSERT_EQUAL(expected->asInt, actual->asInt);
     break;
   case BYTESTRING:
-    TEST_ASSERT_EQUAL_STRING(expected->asString, actual->asString);
+    TEST_ASSERT_EQUAL_INT64(expected->asString.len, actual->asString.len);
+    TEST_ASSERT_EQUAL_STRING(expected->asString.str, actual->asString.str);
     break;
   case LIST:
     validate_list(&expected->asList, &actual->asList);
@@ -90,6 +94,7 @@ void test_lexer() {
   Lexer l = {0};
   l.prevprev = (Token){ILLEGAL, .asString = ""};
   l.prev = (Token){ILLEGAL, .asString = ""};
+  l.bufsize = strlen(input);
   l.buf = input;
 
   for (size_t i = 0; i < ARRAY_LEN(expected_tokens); i++) {
@@ -120,6 +125,7 @@ Parser get_parser(char *input) {
   l.buf = input;
   l.prevprev = (Token){ILLEGAL, .asString = ""};
   l.prev = (Token){ILLEGAL, .asString = ""};
+  l.bufsize = strlen(input);
 
   p.l = l;
   p.cur_token = next_token(&p.l);
@@ -174,7 +180,7 @@ void test_bytestring() {
 
   BencodeType expected = (BencodeType){
       .kind = BYTESTRING,
-      .asString = "spam",
+      .asString = MAKE_STR("spam"),
   };
 
   return validate_type(&expected, &type);
@@ -187,9 +193,9 @@ void test_lists() {
   BencodeType type = parse_item(&p);
 
   BencodeType expected_list[] = {
-      (BencodeType){.kind = BYTESTRING, .asString = "spam"},
-      (BencodeType){.kind = BYTESTRING, .asString = "eggs"},
-      (BencodeType){.kind = BYTESTRING, .asString = "ham"},
+      (BencodeType){.kind = BYTESTRING, .asString = MAKE_STR("spam")},
+      (BencodeType){.kind = BYTESTRING, .asString = MAKE_STR("eggs")},
+      (BencodeType){.kind = BYTESTRING, .asString = MAKE_STR("ham")},
   };
 
   BencodeType expected = (BencodeType){
@@ -236,16 +242,17 @@ void test_dict() {
   };
 
   BencodeType expected_values[] = {
-      (BencodeType){.kind = BYTESTRING, .asString = "moo"},
-      (BencodeType){.kind = BYTESTRING, .asString = "eggs"},
-      (BencodeType){.kind = BYTESTRING, .asString = "itest"},
-      (BencodeType){.kind = BYTESTRING, .asString = "ltest"},
+      (BencodeType){.kind = BYTESTRING, .asString = MAKE_STR("moo")},
+      (BencodeType){.kind = BYTESTRING, .asString = MAKE_STR("eggs")},
+      (BencodeType){.kind = BYTESTRING, .asString = MAKE_STR("itest")},
+      (BencodeType){.kind = BYTESTRING, .asString = MAKE_STR("ltest")},
   };
 
   TEST_ASSERT_EQUAL(DICTIONARY, type.kind);
 
   for (size_t i = 0; i < ARRAY_LEN(expected_keys); i++) {
-    BencodeType *t = hash_table_lookup(&type.asDict, expected_keys[i], strlen(expected_keys[i]));
+    BencodeType *t = hash_table_lookup(&type.asDict, expected_keys[i],
+                                       strlen(expected_keys[i]));
     char msg[100];
     sprintf(msg, "expected key %s to be in the dict at i = %ld\n",
             expected_keys[i], i);
@@ -255,8 +262,8 @@ void test_dict() {
 
     TEST_ASSERT_EQUAL_MESSAGE(BYTESTRING, t->kind, msg);
 
-    TEST_ASSERT_EQUAL_STRING_MESSAGE(expected_values[i].asString, t->asString,
-                                     msg);
+    TEST_ASSERT_EQUAL_STRING_MESSAGE(expected_values[i].asString.str,
+                                     t->asString.str, msg);
   }
 }
 
@@ -278,7 +285,7 @@ void test_multiple_values() {
   };
 
   BencodeType expected_values[] = {
-      (BencodeType){.kind = BYTESTRING, .asString = "hello"},
+      (BencodeType){.kind = BYTESTRING, .asString = MAKE_STR("hello")},
       (BencodeType){.kind = INTEGER, .asInt = 1230},
       (BencodeType){.kind = LIST, .asList = expected_list},
   };

@@ -20,11 +20,16 @@ typedef struct BencodeList {
   struct BencodeType *values;
 } BencodeList;
 
+typedef struct BencodeString {
+  size_t len;
+  char *str;
+} BencodeString;
+
 typedef struct BencodeType {
   BencodeKind kind;
   union {
-    char *asString;
-    signed long asInt;
+    BencodeString asString;
+    long asInt;
     BencodeList asList;
     hash_table_t asDict;
   };
@@ -82,6 +87,7 @@ Lexer new_lexer(char *filename);
 
 #endif // PARSER_H
 
+#define BENCODE_IMPLEMENTATION
 #ifdef BENCODE_IMPLEMENTATION
 #undef BENCODE_IMPLEMENTATION
 
@@ -129,6 +135,10 @@ BencodeType parse_bytestring(Parser *p) {
   assert(p->cur_token.type == STRING_SIZE);
   BencodeType s = {0};
 
+  BencodeString str = {
+      .len = p->cur_token.asInt,
+  };
+
   if (!expect_peek(p, COLON)) {
     return s;
   }
@@ -138,7 +148,8 @@ BencodeType parse_bytestring(Parser *p) {
     return s;
   }
 
-  s.asString = p->cur_token.asString;
+  str.str = p->cur_token.asString;
+  s.asString = str;
 
   return s;
 }
@@ -178,7 +189,7 @@ BencodeType parse_dict(Parser *p) {
     BencodeType *heap_value = malloc(sizeof(BencodeType));
 
     memcpy(heap_value, &value, sizeof(BencodeType));
-    hash_table_insert(&d.asDict, key.asString, strlen(key.asString),
+    hash_table_insert(&d.asDict, key.asString.str, strlen(key.asString.str),
                       heap_value);
 
     parser_next_token(p);
