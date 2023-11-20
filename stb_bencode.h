@@ -27,6 +27,7 @@ typedef struct BencodeString {
 
 typedef struct BencodeType {
   BencodeKind kind;
+  unsigned char sha1_digest[20];
   union {
     BencodeString asString;
     long asInt;
@@ -50,6 +51,7 @@ typedef enum {
 
 typedef struct {
   TokenType type;
+  size_t pos;
   union {
     char *asString;
     long asInt;
@@ -87,9 +89,12 @@ Lexer new_lexer(char *filename);
 
 #endif // PARSER_H
 
-#define BENCODE_IMPLEMENTATION
 #ifdef BENCODE_IMPLEMENTATION
 #undef BENCODE_IMPLEMENTATION
+
+#ifndef BENCODE_GET_SHA1
+#define BENCODE_GET_SHA1(a, b, c) ""
+#endif
 
 #include <assert.h>
 #include <ctype.h>
@@ -184,11 +189,27 @@ BencodeType parse_dict(Parser *p) {
       return d;
     }
 
+#ifdef BENCODE_HASH_INFO_DICT
+    bool parsing_info_dict = strcmp(key.asString.str, "info") == 0;
+    size_t start_pos = 0;
+    if (parsing_info_dict) {
+      assert(p->peek_token.type == DICT_START);
+      start_pos = p->peek_token.pos;
+    }
+#endif
+
     parser_next_token(p);
     BencodeType value = parse_item(p);
     BencodeType *heap_value = malloc(sizeof(BencodeType));
+#ifdef BENCODE_HASH_INFO_DICT
+    if (parsing_info_dict) {
+      assert(p->cur_token.type == END);
+      char *digest = BENCODE_GET_SHA1(p->l.buf, start_pos, p->cur_token.pos);
+      memcpy(value.sha1_digest, digest, 20);
+    }
+#endif
 
-    memcpy(heap_value, &value, sizeof(BencodeType));
+    *heap_value = value;
     hash_table_insert(&d.asDict, key.asString.str, strlen(key.asString.str),
                       heap_value);
 
@@ -305,6 +326,7 @@ Token next_token(Lexer *l) {
   case 'd':
     if (l->prev.type != COLON) {
       t.type = DICT_START;
+      t.pos = l->pos;
       break;
     }
   case 'l':
@@ -320,6 +342,7 @@ Token next_token(Lexer *l) {
   case 'e':
     if (l->prev.type != COLON) {
       t.type = END;
+      t.pos = l->pos;
       break;
     }
   default:

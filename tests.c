@@ -4,6 +4,8 @@
 #include <string.h>
 #include <unity/unity.h>
 
+#define BENCODE_GET_SHA1(a,b,c) "this is a test"
+#define BENCODE_HASH_INFO_DICT
 #define BENCODE_IMPLEMENTATION
 #include "stb_bencode.h"
 
@@ -298,6 +300,38 @@ void test_multiple_values() {
   return validate_list(&expected, &actual);
 }
 
+void test_dict_lexer_positions() {
+  char *test = "d3:cow3:moo4:spam4:eggse";
+
+  Parser p = get_parser(test);
+  Lexer l = p.l;
+  size_t start_pos = 0;
+  size_t end_pos = strlen(test) - 1;
+
+  Token t;
+  while ((t = next_token(&l)).type != END) {
+    if (t.type == DICT_START) {
+      TEST_ASSERT_EQUAL(start_pos, t.pos);
+    }
+  }
+
+  TEST_ASSERT_EQUAL(end_pos, t.pos);
+}
+
+
+void test_get_info_dict_digest() {
+    char *test = "d4:infod1:a1:bee";
+    Parser p = get_parser(test);
+
+    BencodeType first_dict = parse_item(&p);
+    TEST_ASSERT_EQUAL(DICTIONARY, first_dict.kind);
+
+    BencodeType *info_dict = hash_table_lookup(&first_dict.asDict, "info", 4);
+    TEST_ASSERT_NOT_NULL(info_dict);
+    TEST_ASSERT_EQUAL(DICTIONARY, info_dict->kind);
+    TEST_ASSERT_EQUAL_STRING("this is a test", info_dict->sha1_digest);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_lexer);
@@ -307,5 +341,7 @@ int main() {
   RUN_TEST(test_empty_list);
   RUN_TEST(test_dict);
   RUN_TEST(test_multiple_values);
+  RUN_TEST(test_dict_lexer_positions);
+  RUN_TEST(test_get_info_dict_digest);
   return UNITY_END();
 }
