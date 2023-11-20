@@ -41,10 +41,10 @@ void print_bencode(BencodeType t, size_t indent_size) {
   indent(indent_size);
   switch (t.kind) {
   case INTEGER:
-    printf("INT = %ld\n", t.asInt);
+    printf("%ld\n", t.asInt);
     break;
   case BYTESTRING:
-    printf("BYTESTRING = %s\n", t.asString);
+    printf("%s\n", t.asString);
     break;
   case LIST:
     printf("LIST: \n");
@@ -59,7 +59,7 @@ void print_bencode(BencodeType t, size_t indent_size) {
     for (size_t i = 0; i < t.asDict.size; i++) {
       if (t.asDict.values[i].in_use) {
         indent(indent_size + 2);
-        printf("key %s\n", (char *)t.asDict.values[i].key);
+        printf("%s =\n", (char *)t.asDict.values[i].key);
         BencodeType *value = t.asDict.values[i].value;
         print_bencode(*value, indent_size + 2);
       }
