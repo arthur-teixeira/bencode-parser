@@ -44,7 +44,7 @@ void print_bencode(BencodeType t, size_t indent_size) {
     printf("%ld\n", t.asInt);
     break;
   case BYTESTRING:
-    printf("%s\n", t.asString);
+    printf("%s\n", t.asString.str);
     break;
   case LIST:
     printf("LIST: \n");

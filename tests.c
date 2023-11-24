@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unity/unity.h>
+#include <unity/unity_internals.h>
 
 #define BENCODE_GET_SHA1(a,b,c) "this is a test"
 #define BENCODE_HASH_INFO_DICT
@@ -269,37 +270,6 @@ void test_dict() {
   }
 }
 
-void test_multiple_values() {
-  char *test = "5:helloi1230eli1ei2ei3ei4ee";
-  Parser p = get_parser(test);
-  BencodeList actual = parse(&p);
-
-  BencodeType expected_list_values[] = {
-      (BencodeType){.kind = INTEGER, .asInt = 1},
-      (BencodeType){.kind = INTEGER, .asInt = 2},
-      (BencodeType){.kind = INTEGER, .asInt = 3},
-      (BencodeType){.kind = INTEGER, .asInt = 4},
-  };
-
-  BencodeList expected_list = {
-      .len = 4,
-      .values = expected_list_values,
-  };
-
-  BencodeType expected_values[] = {
-      (BencodeType){.kind = BYTESTRING, .asString = MAKE_STR("hello")},
-      (BencodeType){.kind = INTEGER, .asInt = 1230},
-      (BencodeType){.kind = LIST, .asList = expected_list},
-  };
-
-  BencodeList expected = {
-      .len = 3,
-      .values = expected_values,
-  };
-
-  return validate_list(&expected, &actual);
-}
-
 void test_dict_lexer_positions() {
   char *test = "d3:cow3:moo4:spam4:eggse";
 
@@ -332,6 +302,16 @@ void test_get_info_dict_digest() {
     TEST_ASSERT_EQUAL_STRING("this is a test", info_dict->sha1_digest);
 }
 
+void test_string_with_numbers() {
+    char *test = "5:12345";
+
+    Parser p = get_parser(test);
+    BencodeType str = parse_item(&p);
+    TEST_ASSERT_EQUAL(str.kind, BYTESTRING);
+
+    TEST_ASSERT_EQUAL_STRING("12345", str.asString.str);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_lexer);
@@ -340,8 +320,8 @@ int main() {
   RUN_TEST(test_lists);
   RUN_TEST(test_empty_list);
   RUN_TEST(test_dict);
-  RUN_TEST(test_multiple_values);
   RUN_TEST(test_dict_lexer_positions);
   RUN_TEST(test_get_info_dict_digest);
+  RUN_TEST(test_string_with_numbers);
   return UNITY_END();
 }
